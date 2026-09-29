@@ -7,71 +7,68 @@ stage: stable
 
 # Reversing: IDA Pro
 
-*The industry workhorse disassembler: the database is the project, FLIRT names the libraries, scripting extends everything.*
+*A commercial disassembler and decompiler whose central idea is the analysis database: the binary is input, the database is the work product.*
 
 ---
 
-## What IDA adds over the generic workflow
+## What it is
 
-The [workflow](REVERSE_ENGINEERING.md) is the same — format, load,
-disassemble, decompile, annotate — but IDA shapes how the work is
-organised:
+IDA Pro, from Hex-Rays, is a long-established interactive disassembler
+with optional decompilers for common architectures. It follows the
+general [reversing workflow](REVERSE_ENGINEERING.md); what sets it apart
+is how it stores and extends analysis. Ghidra is the main open source
+alternative and shares most of these ideas.
 
-- **The database is the project.** All analysis — names, types,
-  comments, the disassembly itself — lives in the `.i64` database,
-  not in the binary. Sharing the database shares the analysis.
-- **FLIRT signatures** recognise statically linked library code, so
-  you do not reverse `printf` a thousand times — the library functions
-  are named for you, and the *remaining* code is the interesting part.
-- **Scripting.** IDAPython drives every aspect: automate the tedious
-  parts, batch the annotations, extend the tool.
+## How it works
 
----
+| Idea | Meaning in practice |
+|------|---------------------|
+| **Analysis database** | Loading a binary creates a database file holding the disassembly plus every name, type and comment. You reopen and share the database, not the binary. |
+| **Library recognition (FLIRT)** | Byte-pattern signatures identify statically linked library functions and name them, so analysis time goes to the program's own code. |
+| **Type system** | Structs, enums and function prototypes can be declared or imported from headers; decompiler output improves as types are added. |
+| **Cross-references** | Every code and data reference is indexed, so "who calls this" and "who writes this buffer" are one lookup. |
+| **Views** | Linear listing, control-flow graph, hex, strings, pseudocode: one database, several lenses kept in sync. |
+| **Scripting and plugins** | IDAPython (and a C++ SDK) expose the database for automation: bulk renaming, pattern search, custom loaders, reports. |
 
-## The workspace concepts
+## How defenders apply it
 
-| Concept | What it is |
-|---------|------------|
-| **Data displays** | The views: disassembly, hex, structure, strings, graph — same data, different lenses |
-| **Navigation** | Jumping by address, name, xref — the map is the productivity |
-| **Manipulation** | Naming, commenting, converting code to data and back — the annotation loop |
-| **Datatypes** | Defining structs and enums; the decompiler's output quality follows the typing work |
-| **Xrefs and graphing** | Call graphs and data flows — who reaches this, what touches that |
+- **Malware analysis:** let library recognition run, then study what
+  remains unnamed, since that is the author's own code. Export findings
+  as indicators and detection rules.
+- **Patch analysis:** comparing two versions of a vendor binary shows
+  which functions a security update changed, which tells defenders what
+  was fixed and how urgently to deploy it.
+- **Automation:** a script that labels every call to a crypto or network
+  API gives a fast map of a large binary; teams keep such scripts under
+  version control like any other tooling.
+- **Hypothesis testing:** the database can model a changed instruction
+  so an analyst can confirm what a check controls in a lab copy of
+  software they are authorised to study. The deliverable is the
+  explanation, not a modified binary.
 
-The daily loop: follow an xref to a function, read it, name it, type
-its arguments, follow the next xref. The database compounds.
+## Trade-offs and pitfalls
 
----
+- **Cost and licensing.** IDA Pro is commercial; the free edition is
+  limited. Ghidra is free and scriptable, so tool choice is often a
+  budget question more than a capability one.
+- **Signatures can mislead.** A wrong library match names a function
+  confidently and wrongly; check suspicious matches.
+- **Types before refactoring.** Names make cross-references readable,
+  types make pseudocode readable; restructuring before either slows
+  both.
+- **Treat the database as a project artefact.** Back it up and version
+  it. It holds hours of reasoning that the binary does not.
 
-## Extending and patching
+## Related notes
 
-| Extension | What it does |
-|-----------|--------------|
-| **IDAPython** | Full API access — scripts for anything repetitive |
-| **Plugins** | Compiled extensions for heavier work (decompilers, diffing) |
-| **Patching** | Edit the binary through the database — the "test the hypothesis" move (patch a branch, rerun) |
+[REVERSE_ENGINEERING](REVERSE_ENGINEERING.md) holds the tool-neutral
+pipeline. Firmware images from
+[HARDWARE_HACKING](../hardware-security/HARDWARE_HACKING.md) often
+need a custom loader or a manually set base address before analysis.
 
-Patching is not the deliverable — it is the *experiment*: change the
-check, run it, observe, and you have proven what the check does.
+## Sources
 
----
-
-## Rules of thumb
-
-- **Let FLIRT work first.** Any code still unnamed after library
-  recognition is either custom or packed — both are the interesting
-  cases.
-- **Name, then type, then refactor.** Names unlock xrefs; types unlock
-  the decompiler; premature structure slows both.
-- **Script the third repetition.** IDAPython exists so no human
-  renames a hundred functions by hand.
-- **The database is the artifact.** Back it up like the source repo —
-  the analysis is the work product, the binary was only the input.
-
-## Why it matters
-
-When the mesh needs to know what a closed binary does — a driver, a
-firmware blob, a suspicious sample on a station — IDA is the tool
-where that analysis accumulates. The note's point: the tool gives you
-views and scripts; the *database* is where understanding is stored and
-shared.
+- *The IDA Pro Book: The Unofficial Guide to the World's Most Popular Disassembler*, 2nd ed., Chris Eagle, No Starch Press, 2011. [Publisher page](https://nostarch.com/idapro2.htm)
+- Hex-Rays documentation (IDA user guide). [docs.hex-rays.com](https://docs.hex-rays.com/)
+- Hex-Rays, FLIRT signatures. [docs.hex-rays.com](https://docs.hex-rays.com/user-guide/signatures/flirt)
+- Hex-Rays, IDAPython SDK. [docs.hex-rays.com](https://docs.hex-rays.com/developer-guide/idapython)

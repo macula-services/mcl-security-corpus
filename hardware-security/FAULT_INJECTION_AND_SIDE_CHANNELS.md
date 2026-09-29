@@ -7,84 +7,88 @@ stage: stable
 
 # Hardware Security: Fault Injection and Side Channels
 
-*The chip leaks and the chip can be tripped. Fault injection breaks execution mid-step; power analysis reads secrets from the supply current. The two attacks every secure element must survive.*
+*Correct code on real silicon still leaks through physics, and silicon under physical stress stops executing correct code. Devices that hold secrets must be designed for both.*
 
 ---
 
-## The two attack families
+## What it is
 
-| Family | What it is | What it yields |
-|--------|------------|----------------|
-| **Fault injection** | Disturb the device — voltage, clock, EM pulse — to make execution *skip or corrupt* a step | Skipped signature checks, dumped secrets, a comparison that always passes |
-| **Side-channel analysis** | Observe physics — power draw, timing, EM emissions — to *infer* what executes | Keys recovered from power traces, byte by byte |
+Two families of physical attack target the chip rather than the
+software's logic:
 
-The hardware attack model in one line: **a device that runs correct
-code correctly still leaks** (side channels), and **a device under
-physical stress does not run correct code** (faults).
+| Family | Principle | Typical impact |
+|--------|-----------|----------------|
+| **Side-channel analysis** | Power consumption, electromagnetic emission and timing depend on the data being processed | Recovery of cryptographic keys or other secrets |
+| **Fault injection** | Disturbing supply voltage, clock, electromagnetic field, or light pushes the chip outside its operating envelope so instructions are skipped or data corrupted | A security check that fails open, or corrupted crypto output that leaks key material |
 
----
+Both assume physical access or close proximity, so they matter most for
+secure elements, smart cards, hardware wallets, payment terminals,
+automotive ECUs and any device whose owner is not the party it protects.
 
-## Fault injection — the glitch
+## How it works, at concept level
 
-The classic target: a branch that must be taken, skipped — the
-"is signature valid?" check, the "is firmware authenticated?" gate.
-Methods:
+**Side channels.** A transistor switching costs energy, and how many
+switch depends on the values involved. *Simple* analysis reads
+operations directly from one or a few traces (for example, key-dependent
+branches). *Differential* and *correlation* analysis, introduced
+publicly by Kocher, Jaffe and Jun in 1999, apply statistics over many
+traces to test hypotheses about small parts of a key, so even noisy
+leakage becomes exploitable. Timing channels work the same way over
+execution time and can be remote.
 
-| Method | What is disturbed |
-|--------|-------------------|
-| **Voltage glitching** | Drop the supply for nanoseconds — the CPU skips or corrupts an instruction |
-| **Clock glitching** | A too-fast edge — setup violations, skipped steps |
-| **EM fault injection** | A pulse near the chip — same effect, no electrical contact |
+**Faults.** Logic only works within its voltage, clock and temperature
+margins. A brief disturbance at a sensitive moment can corrupt one
+instruction or value. The classic concern is a single conditional
+branch guarding something important (signature verification, a debug
+lock, a PIN counter): if one fault can flip its outcome, the design has
+a single point of failure. Faults during cryptographic computation can
+also produce wrong outputs that reveal key material.
 
-The workflow: identify the moment (trigger on the target operation),
-vary the glitch parameters (width, depth, timing), and observe —
-a glitch that flips the outcome is the finding. The Trezor wallet
-memory dump is the book's worked example of the payoff.
+## Detection
 
----
+- **On-chip sensors:** voltage, clock-frequency, temperature, light and
+  EM glitch detectors that trigger a reset or key wipe.
+- **Consistency checks:** redundant computation or verify-after-sign
+  catches corrupted results before they leave the device.
+- **Tamper response and logging:** count detector events and failed
+  checks; a device seeing repeated anomalies should lock or erase
+  secrets.
+- **Leakage assessment during development:** statistical tests such as
+  TVLA, and certification testing under FIPS 140-3 (non-invasive
+  attacks) or Common Criteria, measure leakage before shipping.
 
-## Power analysis — reading the current
+## Prevention and mitigation
 
-The chip's power draw depends on what it computes: the current trace
-of an AES round differs per key byte.
+| Threat | Countermeasures |
+|--------|-----------------|
+| Timing and simple power analysis | Constant-time code with no secret-dependent branches or memory access |
+| Differential / correlation analysis | Masking (split secrets into random shares), shuffling, hiding in noise, limiting key use per device |
+| Voltage and clock faults | Detectors, internal clock sources, filtered supply |
+| EM and optical faults | Shielding, sensors, dense layout, active meshes |
+| Faults on security decisions | Redundant and inverted checks, random delays, hardened status encodings instead of single-bit flags, fail-closed defaults |
 
-| Analysis | Method | Effort |
-|----------|--------|--------|
-| **SPA (simple)** | Read the trace directly — visible patterns (key schedules, branches) | Low — one trace |
-| **DPA (differential)** | Many traces + statistics: correlate trace segments with a key-byte hypothesis | High — thousands of traces, but recovers keys from noise |
+Mitigation is a co-design of silicon, firmware and protocol: a masked
+algorithm on an unhardened chip, or a hardened chip running a
+leaky library, is not protected.
 
-DPA is the one that breaks real products: the attacker hypothesises a
-key byte, predicts the power it would cause, and correlation across
-traces confirms or rejects the hypothesis — byte by byte.
+## Trade-offs and pitfalls
 
----
+- Countermeasures cost area, power and speed; masking multiplies
+  computation.
+- Compiler optimisation can silently remove redundancy or break
+  constant-time properties; verify the compiled binary.
+- A device secure against one trace or one fault may still fail against
+  higher-order analysis or multiple faults; security levels are stated
+  against a defined attacker budget.
 
-## The defenses
+## Related notes
 
-| Attack | Countermeasure |
-|--------|----------------|
-| Voltage/clock glitching | Glitch detectors, redundant critical branches, hardened clocking |
-| EM fault injection | Shielding, layout, detectors |
-| SPA | Constant-time and constant-power code, no data-dependent branches |
-| DPA | Masking (split secrets so traces are uncorrelated), noise injection, key rotation |
+[HARDWARE_HACKING](HARDWARE_HACKING.md) covers the board-level surface
+around the chip; [CAR_HACKING](CAR_HACKING.md) applies secure-boot and
+key-storage needs to vehicles.
 
-The principle: **the countermeasure must live in the silicon and the
-code** — a secure element is a co-design, not a feature added after.
+## Sources
 
-## Rules of thumb
-
-- **Physical access is full access, unless designed otherwise.** The
-  device must assume the attacker has probes, a power supply, and time.
-- **The glitchable branch is a vulnerability.** Every security check
-  must assume the comparison may be skipped — defend the *result*,
-  not the check.
-- **Assume the trace leaks.** Code that handles secrets must be
-  constant-time and masked; optimisation is the enemy (compiler
-  "improvements" have broken masked implementations).
-
-## Why it matters
-
-Any device the mesh trusts — a secure element, a hardware key store,
-a tamper-evident node — is being measured against exactly these two
-attacks by whoever wants in. The note is the check: before trusting
-hardware, ask what its fault response and its leakage profile are.
+- *The Hardware Hacking Handbook: Breaking Embedded Security with Hardware Attacks*, Jasper van Woudenberg and Colin O'Flynn, No Starch Press, 2021. [Publisher page](https://nostarch.com/hardwarehacking)
+- Paul Kocher, Joshua Jaffe, Benjamin Jun, "Differential Power Analysis", *Advances in Cryptology: CRYPTO '99*, LNCS 1666, Springer, 1999. [Springer](https://link.springer.com/chapter/10.1007/3-540-48405-1_25)
+- NIST FIPS 140-3, *Security Requirements for Cryptographic Modules*, 2019. [CSRC](https://csrc.nist.gov/pubs/fips/140-3/final)

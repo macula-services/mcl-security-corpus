@@ -7,73 +7,81 @@ stage: stable
 
 # Hardware Security: Vehicle Hacking
 
-*The car is a network of ECUs on buses, trust-free by design. The attack surface is the bus, the diagnostic port, and every radio.*
+*A modern vehicle is a distributed system of ECUs on shared buses that were designed for a closed network. Connectivity opened that network; defence now has to be added above the bus.*
 
 ---
 
-## The model
+## What it is
 
-A vehicle is **dozens of ECUs** (engine, brakes, infotainment…)
-talking over **buses** — primarily CAN — with no authentication
-between them: a message is trusted if it is *well-formed*, not if it
-is *authorised*. The bus was designed when the only connection was a
-wrench; now the vehicle has radios.
-
-The threat model follows: **anything that can reach the bus can speak
-for any ECU.**
-
----
+A car contains dozens of electronic control units (ECUs) for engine,
+braking, body functions, infotainment and telematics. Most talk over
+CAN (Controller Area Network), alongside LIN, FlexRay and automotive
+Ethernet. Classic CAN has **no sender authentication**: a frame carries
+an identifier that describes the message type and its bus priority, not
+who sent it, and any node on the bus can transmit any identifier.
+Receivers act on well-formed frames. That was reasonable when the bus
+was physically closed; it is not now that vehicles carry cellular,
+Wi-Fi and Bluetooth links.
 
 ## The attack surface
 
-| Surface | What it is | The attack |
-|---------|------------|------------|
-| **CAN bus** | The vehicle's main nervous system, broadcast, no source addresses | Inject frames — brake, throttle, steering messages |
-| **OBD-II port** | The mandated diagnostic connector — physical access to the bus | The standard entry: plug in, speak CAN |
-| **Diagnostics** | UDS requests over CAN — read/write ECU state | Reprogram ECUs, disable functions |
-| **Infotainment (IVI)** | A networked computer with a radio, bridged to vehicle buses | Remote entry: exploit the IVI, pivot to CAN |
-| **V2V / telematics** | Wireless channels to and from the vehicle | Remote attacks without physical access |
-| **Keyless entry, tire sensors** | Short-range radio protocols | Replay, relay, spoof |
+| Entry point | Why it matters |
+|-------------|----------------|
+| **OBD-II diagnostic port** | Mandated diagnostic access to in-vehicle networks; physical access to the car means access to a bus |
+| **Diagnostic services (UDS, ISO 14229)** | Powerful functions (reprogramming, routine control) gated by "security access" schemes that are sometimes weak |
+| **Infotainment and telematics** | Networked computers with radios; if bridged to safety-relevant buses, a remote compromise can become a vehicle-control problem |
+| **Short-range radio** | Keyless entry and tyre-pressure sensors; relay attacks on passive keyless entry are a known theft method |
+| **Supply chain and aftermarket devices** | Dongles plugged into OBD-II become permanent, network-connected bus nodes |
 
-The hierarchy of access: physical OBD is the strongest position;
-IVI exploitation is the path that makes it remote.
+The attack class of concern is **unauthorised message injection or
+impersonation**: a compromised or rogue node sending frames that
+receiving ECUs treat as genuine.
 
----
+## Detection
 
-## The workflow
+- **CAN intrusion detection.** Most CAN traffic is periodic, so
+  deviations in message timing and frequency, unknown identifiers, or
+  out-of-range signal values are strong anomaly signals.
+- **Gateway monitoring.** A central gateway sees cross-domain traffic
+  and can log and alert on requests that should never cross (for
+  example, diagnostic sessions opened from the infotainment domain while
+  driving).
+- **Diagnostic session logging.** Record security-access attempts and
+  reprogramming requests; repeated failures indicate probing.
+- **Fleet-level monitoring.** UNECE Regulation 155 requires
+  manufacturers to run a certified cybersecurity management system that
+  includes detecting and responding to attacks across their vehicles in
+  service; many do this through a vehicle security operations centre.
 
-1. **Threat model the vehicle** — which ECUs, which buses, what does
-   the attacker want (theft, disablement, data)?
-2. **Connect** — OBD-II or a bench harness; `SocketCAN` on Linux
-   gives the bus as a network interface.
-3. **Observe** — log the traffic; reverse-engineer which frame does
-   what (the hard part: correlating frames with behaviour).
-4. **Isolate** — a bench with one ECU lets you experiment safely,
-   away from the vehicle.
-5. **Inject** — send crafted frames; observe the effect. The finding
-   is *control*: "frame X, sent once, unlocks the doors."
-6. **Radio** — SDR for the wireless protocols: keyless entry,
-   TPMS, V2V.
+## Prevention and mitigation
 
----
+| Control | Effect |
+|---------|--------|
+| **Domain separation and gateway filtering** | Infotainment and telematics cannot send safety-relevant frames; only whitelisted identifiers cross domains |
+| **Message authentication (AUTOSAR SecOC)** | A truncated MAC plus a freshness value on critical frames lets receivers reject forged or replayed messages |
+| **Strong diagnostic authentication** | Replace weak seed/key schemes with certificate-based authorisation; lock diagnostics while moving |
+| **Secure boot and signed updates** | ECUs run only manufacturer-signed firmware, including over-the-air updates |
+| **Relay resistance** | Distance bounding (for example UWB ranging) for passive keyless entry |
+| **Engineering process** | Threat analysis and risk assessment per ISO/SAE 21434 across the vehicle lifecycle |
 
-## Rules of thumb
+## Trade-offs and pitfalls
 
-- **Never test on a vehicle in motion, ever.** Bench first, then
-  stationary, with the safety systems understood. The stakes are
-  physical.
-- **The bus trusts form, not sender.** Every defense must be
-  layered *above* the bus — message authentication, gateway
-  firewalls — because the bus itself will never be retrofitted.
-- **Correlate before injecting.** One frame at a time, observed,
-  understood — the difference between a finding and a bricked ECU.
-- **The IVI is the bridge.** Segment it from the vehicle buses; a
-  hardened IVI makes the remote path die at the head unit.
+- CAN frames are small (8 data bytes in classic CAN), so MACs are
+  truncated and freshness must be managed carefully; CAN FD eases this.
+- Retrofitting authentication onto existing platforms is slow; gateway
+  segmentation is usually the first achievable control.
+- Safety testing matters: security assessment belongs on a bench or a
+  stationary, controlled vehicle, never on a public road.
 
-## Why it matters
+## Related notes
 
-The same pattern as every embedded system, at vehicle scale: legacy
-buses, assumed trust, radios added later. Vehicle hacking is the
-clearest case study of the hardware-security rule — **threat model
-with the case open, because the attacker will be holding the wrench
-(or the radio).**
+The vehicle is a case of the general model in
+[HARDWARE_HACKING](HARDWARE_HACKING.md). ECU firmware review uses the
+[reversing workflow](../reversing/REVERSE_ENGINEERING.md).
+
+## Sources
+
+- *The Car Hacker's Handbook: A Guide for the Penetration Tester*, Craig Smith, No Starch Press, 2016. [Publisher page](https://nostarch.com/carhacking)
+- AUTOSAR, *Specification of Secure Onboard Communication Protocol*, FO R24-11. [autosar.org (PDF)](https://www.autosar.org/fileadmin/standards/R24-11/FO/AUTOSAR_FO_PRS_SecOcProtocol.pdf)
+- NHTSA, *Cybersecurity Best Practices for the Safety of Modern Vehicles*, 2022. [nhtsa.gov](https://www.nhtsa.gov/document/cybersecurity-best-practices-safety-modern-vehicles-2022)
+- Linux kernel documentation, SocketCAN. [kernel.org](https://www.kernel.org/doc/html/latest/networking/can.html)

@@ -7,98 +7,84 @@ stage: stable
 
 # Hardware Security: The Device Attack Surface
 
-*Debug ports, buses, firmware, radios. The surfaces below the OS — where the device trusts whoever holds it.*
+*Once someone holds the device, the operating system is no longer the boundary. Debug interfaces, board-level buses, firmware and radios are.*
 
 ---
 
-## Threat model the device first
+## What it is
 
-Hardware security starts with the same question as software — what
-could go wrong — but the assumptions differ:
+Hardware security asks what a device still protects when an adversary
+physically possesses it. For embedded and IoT products this is the
+normal case: devices are sold, lost, discarded and resold. Threat
+modelling therefore has to include the device on a bench, not only the
+device on a network.
 
-| Software assumption | Hardware reality |
-|---------------------|------------------|
-| The attacker is remote | The attacker **owns the device**: opens it, probes it, reads its memory |
-| The OS is the boundary | The chip is the boundary — and its debug ports are the doors |
+| Network-centric assumption | Physical-possession reality |
+|----------------------------|-----------------------------|
+| The adversary is remote | The adversary can open the enclosure |
+| The OS enforces isolation | Components below the OS are reachable directly |
+| Secrets at rest are safe | Storage parts can be examined outside the device |
 
-Model the device as the attacker sees it: case off, probes on, no OS
-in the way.
+## The four exposure areas
 
----
+- **Debug interfaces.** Manufacturing and repair ports (serial consoles,
+  chip debug interfaces such as JTAG and SWD) are useful in the factory
+  and a liability in the field if left enabled.
+- **Board-level buses.** Links between processor, flash, sensors and
+  secure elements are usually unencrypted, so sensitive data crossing
+  them is exposed to anyone with physical access.
+- **Firmware.** The image carries code, configuration and, in weak
+  designs, secrets shared by every unit, leftover debug features, and an
+  update path that accepts unverified images.
+- **Short-range radio.** RFID, NFC, BLE and remote-control protocols
+  that rely on a static identifier prove little; the design question is
+  what the exchange actually authenticates.
 
-## The debug ports — UART, JTAG, SWD
+## Detection and assessment
 
-| Port | What it is | What it gives the attacker |
-|------|------------|---------------------------|
-| **UART** | Serial console, often left enabled in production | A root shell, boot logs, secrets printed at boot |
-| **JTAG** | Chip-level debug, boundary scan | Halt the CPU, read/write memory, dump firmware |
-| **SWD** | ARM's two-wire JTAG equivalent | The same, on ARM |
+- Review **production** units, not prototypes: debug settings often
+  differ between the two.
+- Inventory what each external or internal interface exposes, and what
+  data crosses each bus in plaintext.
+- Examine firmware you ship (or are authorised to assess) for embedded
+  credentials, keys, test tooling, and unsigned update handling, using
+  the [reversing workflow](../reversing/REVERSE_ENGINEERING.md).
+- Watch fleet telemetry for signs of tampering: unexpected firmware
+  versions, failed signature checks, enclosure-open sensors.
 
-The test: probe the board's headers and test points for a serial
-console at common baud rates. **A device that ships its debug console
-open is a device that shipped its root access.**
+## Prevention and mitigation
 
-Defense: disable or fuse off debug interfaces in production, and log
-what the boot process prints — those logs are the first thing a UART
-leaks.
+| Area | Controls |
+|------|----------|
+| Debug | Disable or permanently lock debug in production; authenticated debug where field service needs it |
+| Buses | Keep secrets inside a secure element; encrypt or authenticate sensitive inter-chip traffic |
+| Firmware | Secure boot with a hardware root of trust; signed updates with rollback protection; per-device credentials; no secrets in images |
+| Radio | Challenge-response with per-device keys; distance bounding where relays matter |
+| Lifecycle | Secure decommissioning that wipes keys; vulnerability disclosure and update support for the product's life |
 
----
+NIST SP 800-193 frames the firmware goals as protect, detect and
+recover, which is a useful checklist for any device design.
 
-## The buses — SPI and I2C
+## Trade-offs and pitfalls
 
-Between the main chip and its peripherals — flash, sensors, secure
-elements — data moves on serial buses. An attacker with a logic
-analyser clips onto the traces and **watches the secrets cross the
-wire**: flash contents during boot, sensor data, keys in transit.
+- Locking debug complicates repair and failure analysis; plan an
+  authenticated service path instead of leaving the port open.
+- A single key shared across a product line turns one compromised unit
+  into a fleet-wide compromise.
+- Signed updates without rollback protection still allow a downgrade to
+  a vulnerable version.
 
-The finding that matters: what travels **unencrypted between
-components on the same board**. The defense: encrypted channels or
-physically protected traces where the data is sensitive — and knowing
-what is exposed either way.
+## Related notes
 
----
+[FAULT_INJECTION_AND_SIDE_CHANNELS](FAULT_INJECTION_AND_SIDE_CHANNELS.md)
+covers attacks on the chip itself; [CAR_HACKING](CAR_HACKING.md) applies
+the same model to vehicles.
 
-## Firmware hacking
+## Sources
 
-The firmware image is the device's soul — and usually its dump:
-
-- **Acquisition**: from the vendor's update file, or read off the
-  flash via the debug ports above.
-- **Analysis**: filesystem extraction, strings, embedded keys and
-  certificates, leftover debug binaries.
-- **The classic findings**: hardcoded credentials, private keys,
-  update mechanisms that accept unsigned images.
-
-The defense is symmetric: **no secrets in firmware**, signed updates
-enforced, and strip the debug build before shipping.
-
----
-
-## Short-range radio — RFID and friends
-
-Radio adds an attack surface that needs no physical contact: RFID
-cards and tags trust proximity. The attacks are cloning (read the
-tag, write another), relay (extend the read range), and spoofing —
-and the defense questions are the same as everywhere: what does the
-tag actually prove, and is that enough for what it unlocks?
-
----
-
-## Rules of thumb
-
-- **Threat model with the case off.** The attacker is not remote; the
-  device is in their hands.
-- **Check the debug ports before you ship** — and check them again in
-  the production units, not the prototypes.
-- **Watch the buses**: anything crossing SPI/I2C unencrypted is
-  readable by a $20 logic analyser.
-- **Treat firmware like source code**: reviewed, signed, stripped of
-  debug, and free of secrets.
-
-## Why it matters
-
-The mesh's fleet runs on physical boxes, and the mesh's future
-includes devices at the edge — weather stations, sensors, whatever
-earns a place on a station. Hardware security is the discipline that
-asks the device questions *before* the device ships: what does it
-trust, what does it leak, and who can hold it while it answers.
+- *Practical IoT Hacking: The Definitive Guide to Attacking the Internet of Things*, Fotios Chantzis, Ioannis Stais, Paulino Calderon, Evangelos Deirmentzoglou, Beau Woods, No Starch Press, 2021. [Publisher page](https://nostarch.com/practical-iot-hacking)
+- *The Hardware Hacker: Adventures in Making and Breaking Hardware*, Andrew "bunnie" Huang, No Starch Press, 2017 (paperback 2019). [Publisher page](https://nostarch.com/hardwarehackerpaperback)
+- NIST SP 800-193, *Platform Firmware Resiliency Guidelines*, 2018. [CSRC](https://csrc.nist.gov/pubs/sp/800/193/final)
+- NIST IR 8259A, *IoT Device Cybersecurity Capability Core Baseline*, 2020. [CSRC](https://csrc.nist.gov/pubs/ir/8259/a/final)
+- OWASP Internet of Things Project. [OWASP](https://owasp.org/www-project-internet-of-things/)
+- MITRE ATT&CK, Pre-OS Boot (T1542). [MITRE](https://attack.mitre.org/techniques/T1542/)

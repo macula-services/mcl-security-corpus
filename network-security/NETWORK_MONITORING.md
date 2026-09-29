@@ -7,76 +7,103 @@ stage: stable
 
 # Network Security: Monitoring (NSM)
 
-*Collect the network's own data, analyse it, respond. The five data types are the trade: how much detail can you afford against how much volume you carry.*
+*Assume some attacks will get past prevention; keep enough network evidence to notice them, scope them and prove what happened.*
 
 ---
 
-## Why monitor
+## What it is
 
-Prevention fails — that is not cynicism, it is the design premise.
-Firewalls and signatures stop what they know; NSM exists for what they
-do not. Network security monitoring is **the collection and analysis
-of network data to detect and respond to intrusions** — the layer that
-answers "are we owned?" from evidence, not from hope.
+Network security monitoring (NSM) is the practice of collecting network
+traffic records, analysing them for signs of intrusion, and using them to
+drive incident response. It starts from a design assumption rather than a
+product: filters and signatures block what they already recognise, so an
+organisation also needs a way to find what they missed. NSM supplies that
+second line with evidence instead of guesswork.
 
----
-
-## The five data types
-
-| Type | What it is | Trade |
-|------|------------|-------|
-| **Full content** | The raw packets — every byte | Total detail, massive volume; kept only briefly |
-| **Session data** | Summaries of conversations: who talked to whom, when, how much | The first thing to query; cheap to keep long |
-| **Transaction data** | Application-level records (DNS queries, HTTP requests, emails) | Protocol meaning without payload bulk |
-| **Statistical data** | Aggregates over time: counts, bytes, connections per host | Trend and anomaly; the baseline |
-| **Alert data** | What the detection tools flagged (IDS signatures, heuristics) | Judgement pre-applied — verify, never trust blindly |
-
-The workflow follows the ladder: an **alert** names a moment, the
-**session data** shows the conversation, **transaction data** shows
-what was said, **full content** shows everything — if you kept it.
+It is distinct from intrusion prevention. An IPS decides in real time and
+drops traffic; NSM keeps records so that a human or a later query can
+reconstruct events hours or weeks afterwards.
 
 ---
 
-## Deployment shapes
+## Kinds of network evidence
 
-| Shape | When |
-|-------|------|
-| **Stand-alone** | One sensor watching one segment — the starting point |
-| **Distributed** | Sensors at each segment, one central console — the scaling shape |
+Each kind of record trades detail against storage cost and retention time.
 
-Placement is the whole game: a sensor sees only the traffic that passes
-it. Watch the chokepoints — internet egress, the segment in front of
-the crown jewels — because that is where the traffic *is*.
+| Record | Contents | Typical use | Cost |
+|--------|----------|-------------|------|
+| **Packet capture** | Every byte on the wire | Final proof, payload analysis (when not encrypted) | Very high; retained for days at most |
+| **Flow / session records** | Endpoints, ports, start and end time, byte and packet counts | First pivot in almost every investigation | Low; retain for months |
+| **Protocol logs** | Parsed application events: DNS lookups, HTTP requests, TLS handshake metadata, file transfers | Meaning without payload bulk | Moderate |
+| **Aggregates and statistics** | Counts and volumes per host, port or time window | Baselines, trends, anomaly spotting | Very low |
+| **Detector alerts** | Signature or heuristic hits from an IDS | Starting points for triage | Low, but noisy |
 
----
-
-## The detection workflow
-
-1. **Alert fires** — something matched a signature or heuristic.
-2. **Pivot to session data** — what else did that host do, with whom,
-   when?
-3. **Pull transaction records** — which requests, which DNS lookups?
-4. **Reach for full content** — the actual bytes, if retention allows.
-5. **Cross-correlate logs** — server logs, proxy logs, endpoint data —
-   the network view is one view.
+An example: an IDS alerts that a workstation fetched a file matching a
+known malicious pattern. Flow records show the same host has since opened
+a small, regular outbound connection every 60 seconds to one address.
+Protocol logs show the address was reached through a newly registered
+domain. If packet capture is still retained, it confirms the content. Each
+layer narrows the question for the next.
 
 ---
 
-## Rules of thumb
+## Where sensors go
 
-- **Collect before you need it.** Retrospective analysis is only
-  possible if the data was captured; retention policy is a security
-  decision, not a storage decision.
-- **Session data is the workhorse.** Cheap, long-lived, and enough to
-  answer most questions; keep it longer than everything else.
-- **Alerts are hypotheses.** A signature match is the *start* of an
-  investigation, never its conclusion.
-- **Baseline the normal.** Statistical data means nothing without a
-  normal to compare against; anomaly detection is baseline detection.
+A sensor sees only traffic that passes its tap or span port, so placement
+decides coverage.
 
-## Why it matters
+- **Egress points** to the internet: catch outbound command-and-control and
+  data leaving.
+- **In front of high-value segments**: databases, identity systems, build
+  infrastructure.
+- **Between trust zones**: east-west traffic is where lateral movement shows.
 
-The mesh's stations are boxes on networks: every node, every service,
-every station link is traffic that either is or is not being watched.
-NSM is the discipline that turns "we have a firewall" into "we would
-see an intruder within hours, and prove what they did".
+Small environments start with one sensor. Larger ones run a sensor per
+segment feeding a central store and console. Encrypted traffic limits
+payload inspection, which pushes the weight onto flow records, DNS and TLS
+metadata, and endpoint telemetry.
+
+---
+
+## The investigation loop
+
+1. **Triage the trigger**: an alert, a user report, a threat-intel match.
+2. **Widen with flow records**: what else did this host talk to, and when?
+3. **Add protocol context**: names resolved, URLs requested, certificates seen.
+4. **Confirm with content** if packet capture exists for that window.
+5. **Correlate beyond the network**: host logs, proxy logs, authentication
+   events, EDR. The network is one vantage point.
+6. **Feed back**: turn what was learned into a new detection or a tuned one.
+
+---
+
+## Trade-offs and pitfalls
+
+- **Retention is a security decision.** Evidence not kept cannot be
+  searched later; decide retention per record type, not by disk defaults.
+- **Alerts are leads, not verdicts.** Untuned signatures bury analysts;
+  measure false-positive rates and prune.
+- **No baseline, no anomaly.** Statistical detection only works against a
+  recorded picture of normal traffic.
+- **Blind spots are silent.** Document which segments have no sensor and
+  which traffic is encrypted end to end.
+- **Privacy and law.** Full capture can contain personal data; limit access
+  and retention accordingly.
+
+---
+
+## Relation to the rest of the corpus
+
+[CYBERWARFARE](CYBERWARFARE.md) describes patient adversaries whose
+command channels NSM is well placed to spot.
+[5G_ATTACK_DETECTION](5G_ATTACK_DETECTION.md) applies learned
+classification to the same flow features. For the mesh, every station
+link is traffic that is either watched or not; NSM is how "we have a
+firewall" becomes "we would notice and could prove an intrusion".
+
+## Sources
+
+- *The Practice of Network Security Monitoring: Understanding Incident Detection and Response*, Richard Bejtlich, No Starch Press, 2013. <https://nostarch.com/nsm>
+- NIST SP 800-94, *Guide to Intrusion Detection and Prevention Systems (IDPS)*, Karen Scarfone and Peter Mell, NIST, 2007. <https://csrc.nist.gov/pubs/sp/800/94/final>
+- NIST SP 800-61 Rev. 3, *Incident Response Recommendations and Considerations for Cybersecurity Risk Management: A CSF 2.0 Community Profile*, NIST, 2025. <https://csrc.nist.gov/pubs/sp/800/61/r3/final>
+- Zeek documentation, log reference (conn, dns, http and other protocol logs). <https://docs.zeek.org/en/master/logs/index.html>

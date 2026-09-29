@@ -7,72 +7,108 @@ stage: stable
 
 # Web Security: Bot Defense
 
-*Bad bots are more than a fifth of internet traffic: scraping, carding, credential stuffing, ad fraud, DDoS. The defense is classification and management, not prohibition.*
+*Automated abuse uses a site's legitimate features at a scale and intent the owner never agreed to. Defense means telling good automation from bad, then applying a policy, not banning bots outright.*
 
 ---
 
-## The enemy
+## What the problem is
 
-A **botnet** is a distributed network of malware-infected machines,
-not willing participants. Bad bots account for **more than one-fifth
-of all internet traffic**, and the harm is concrete:
+Many harmful bots do not exploit a bug. They call the login form, the
+checkout, the search box or the gift-card balance page exactly as
+designed, only thousands of times a minute and for someone else's
+benefit. OWASP's Automated Threats project catalogues these as OAT
+entries; a few that matter to most sites:
 
-| Attack | What it does |
-|--------|--------------|
-| **Carding** | Brute-force card validation against checkout |
-| **Credential stuffing** | Stolen credential lists replayed at login |
-| **Price scraping / inventory fraud** | Bots hold items in carts, harvest prices |
-| **Click / ad fraud** | Fake clicks on ads and affiliate links |
-| **DDoS** | Distributed denial of service — the availability attack |
-| **Extortion** | Ransom-DDoS: pay, or the attack continues |
+| Automated threat (OWASP OAT) | What the abuse looks like |
+|------------------------------|---------------------------|
+| Credential Stuffing (OAT-008) | Username and password pairs leaked elsewhere tried against your login |
+| Carding (OAT-001) | Stolen card details tested with small payments to find valid ones |
+| Scraping (OAT-011) | Bulk collection of content or prices |
+| Denial of Inventory (OAT-021) | Items held in carts or bookings so real customers cannot buy them |
+| Skewing (OAT-016) | Repeated clicks or requests that distort a metric, such as ad clicks or votes |
+| Denial of Service (OAT-015) | Enough application-level requests to exhaust the service |
 
-Not all bots are malicious — search crawlers, uptime monitors, price
-comparison bots are legitimate — so the defense is **classification
-and policy**, not a ban on automation.
+The traffic often comes from botnets (compromised devices whose owners
+are unaware) or from residential proxy networks, which makes IP address
+alone a weak signal.
 
----
-
-## The defense shape
-
-1. **Classify** — separate human from bot, and good bot from bad:
-   behaviour (mouse, timing, navigation), reputation (IP and UA
-   databases), and challenges (CAPTCHA, JS proof-of-work) for the
-   uncertain middle.
-2. **Manage, per policy** — allow the good bots (crawlers),
-   rate-limit the grey, block the bad. The policy is the product: a
-   shop wants Googlebot through and carding bots dead.
-3. **Protect the endpoints that matter** — login (stuffing),
-   checkout (carding), and the application as a whole (DDoS at the
-   edge, upstream of the origin).
+Plenty of automation is wanted: search engine crawlers, uptime checks,
+partner integrations, accessibility tools. Blocking all of it hurts the
+business, so the goal is classification plus policy.
 
 ---
 
-## Where the tools sit
+## How defense works
 
-| Layer | Tool class |
-|-------|------------|
-| Edge / CDN | DDoS absorption, rate limiting, geo policies |
-| Application | **WAF** — request inspection at the app layer; bot-management rules |
-| Identity | Login protection: risk scoring, MFA escalation |
+1. **Identify the features worth abusing.** Login, account creation,
+   password reset, payment, gift-card and coupon checks, inventory
+   holds, search. These are the OAT targets for your application.
+2. **Collect signals per request and per session.** Request rate and
+   pattern, IP and ASN reputation, TLS and HTTP client fingerprints,
+   header consistency, device signals, and behaviour such as navigation
+   order and timing. Verified good bots can be recognised by reverse DNS
+   or published IP ranges rather than by the user-agent string, which is
+   trivially set.
+3. **Decide per policy.** Allow verified good bots, throttle or
+   challenge the uncertain, block the clearly abusive. The policy is a
+   business decision per endpoint.
+4. **Respond in proportion.** Rate limits, step-up authentication,
+   challenges, delayed or degraded responses, account lockout with
+   notification.
 
-The WAF is the centre of the web bot defense: it sees every request,
-holds the policies, and feeds the signals (rate, reputation,
-challenge) into one decision per request.
+For credential stuffing specifically, OWASP ranks MFA as the most
+effective control, supported by checking passwords against known-breach
+lists and risk-based step-up for logins from new devices or networks.
 
-## Rules of thumb
+---
 
-- **Defend login and checkout first.** The bot's economy targets
-  exactly those two; everything else is secondary.
-- **Measure bot share.** You cannot manage what is not classified;
-  bot-share dashboards are the first dashboard.
-- **Challenges are a tax on humans too.** Use them for the uncertain
-  middle, not as the default — every CAPTCHA costs real users.
-- **DDoS defense lives at the edge.** Absorb upstream of the origin;
-  a WAF on the origin absorbs nothing.
+## Where controls sit
 
-## Why it matters
+| Layer | Controls |
+|-------|----------|
+| Network edge / CDN | Volumetric DDoS absorption, coarse rate limits, geo and ASN policy |
+| Application edge (WAF, bot management) | Request inspection, fingerprinting, per-endpoint rate limits, challenges |
+| Application logic | Business limits (cards per account per hour, holds per session), idempotency, abuse flags |
+| Identity | MFA, breached-password checks, risk scoring, user notifications |
 
-Any public mesh endpoint — a station API, a web app, a checkout —
-inherits the bot economy the moment it is reachable. Bot defense is
-the practice that keeps automated abuse a policy problem instead of
-an availability problem.
+Volumetric floods must be absorbed upstream of the origin; a WAF in
+front of a saturated link cannot help. Application-layer abuse, by
+contrast, is often only visible with business context, so some limits
+belong in the application itself.
+
+---
+
+## Detection signals
+
+- Login failure ratio rising sharply, especially spread across many
+  accounts from many IPs (stuffing) rather than many tries on one
+  account (brute force).
+- Clusters of small-value payment authorisations and declines (carding).
+- Carts or reservations created and abandoned at machine pace.
+- Traffic share by classification (human, good bot, bad bot, unknown)
+  tracked over time; a sudden shift is an incident signal.
+
+## Trade-offs and pitfalls
+
+- Challenges and CAPTCHAs burden real users and can exclude people with
+  disabilities; reserve them for the uncertain middle.
+- Attackers adapt to any single signal. Layer signals and review
+  policies when metrics drift.
+- Blocking by IP alone fails against proxy networks and punishes users
+  behind shared addresses.
+- Bot defense does not fix vulnerabilities; it limits abuse of working
+  features. Pair it with the fixes in [WEB_SECURITY](WEB_SECURITY.md).
+
+## Related notes
+
+Any publicly reachable mesh endpoint inherits these threats;
+[NETWORK_ATTACKS](../pentest/NETWORK_ATTACKS.md) covers botnets from the
+network side, and [API_TESTING](../pentest/API_TESTING.md) covers rate
+limiting and resource consumption in APIs.
+
+## Sources
+
+- No single book source could be identified for this note; it is based on open OWASP material.
+- OWASP Automated Threats to Web Applications (OAT catalogue and handbook). https://owasp.org/www-project-automated-threats-to-web-applications/
+- OWASP Bot Management and Anti-Automation Cheat Sheet. https://cheatsheetseries.owasp.org/cheatsheets/Bot_Management_and_Anti-Automation_Cheat_Sheet.html
+- OWASP Credential Stuffing Prevention Cheat Sheet. https://cheatsheetseries.owasp.org/cheatsheets/Credential_Stuffing_Prevention_Cheat_Sheet.html
