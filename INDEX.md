@@ -34,6 +34,7 @@ The web's classic vulnerabilities and their defenses.
 |------|--------|
 | [README](web-security/README.md) | The stable classes in one page |
 | [WEB_SECURITY](web-security/WEB_SECURITY.md) | Injection, XSS (stored/reflected/DOM), CSRF, sessions |
+| [BOT_DEFENSE](web-security/BOT_DEFENSE.md) | Bad bots, classification and policy, WAF placement |
 
 ### Network security — `network-security/`
 
@@ -43,6 +44,7 @@ Monitoring the network to find intruders.
 |------|--------|
 | [README](network-security/README.md) | NSM in one page |
 | [NETWORK_MONITORING](network-security/NETWORK_MONITORING.md) | The five data types, deployment, the detection workflow |
+| [5G_ATTACK_DETECTION](network-security/5G_ATTACK_DETECTION.md) | ML classification over flow features, CICIoT2023, edge placement |
 
 ### Pentest — `pentest/`
 
@@ -53,6 +55,10 @@ Authorized offensive testing.
 | [README](pentest/README.md) | The discipline in one page |
 | [PENTEST_METHODOLOGY](pentest/PENTEST_METHODOLOGY.md) | The seven stages, and the authorization that makes it legal |
 | [API_TESTING](pentest/API_TESTING.md) | Discovery, authn/authz, fuzzing, mass assignment, rate limits, GraphQL |
+| [BUG_BOUNTY](pentest/BUG_BOUNTY.md) | Program selection, the classes that pay, the workflow |
+| [EXPLOITATION_BASICS](pentest/EXPLOITATION_BASICS.md) | The memory model, overflows, shellcode, the modern defenses |
+| [PYTHON_TOOLING](pentest/PYTHON_TOOLING.md) | Sockets, Scapy, sniffing, exfil, the scripting loop |
+| [NETWORK_ATTACKS](pentest/NETWORK_ATTACKS.md) | ARP spoofing, botnets, TLS interception, pivoting — and their detections |
 
 ### Reversing — `reversing/`
 
@@ -62,6 +68,7 @@ Understanding binaries from their bytes.
 |------|--------|
 | [README](reversing/README.md) | The discipline in one page |
 | [REVERSE_ENGINEERING](reversing/REVERSE_ENGINEERING.md) | The workflow: format, load, disassemble, decompile, annotate |
+| [IDA_PRO](reversing/IDA_PRO.md) | The database as project, FLIRT, IDAPython, patching |
 
 ### Hardware security — `hardware-security/`
 
@@ -71,6 +78,7 @@ The attack surface below the OS.
 |------|--------|
 | [README](hardware-security/README.md) | The device surface in one page |
 | [HARDWARE_HACKING](hardware-security/HARDWARE_HACKING.md) | UART/JTAG/SWD, SPI/I2C, firmware, radio — and the defenses |
+| [CAR_HACKING](hardware-security/CAR_HACKING.md) | CAN bus, ECUs, OBD-II, IVI pivot, SDR |
 
 ---
 
