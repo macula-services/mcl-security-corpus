@@ -25,6 +25,7 @@ Designing software that resists attack.
 |------|--------|
 | [README](secure-design/README.md) | The design discipline in one page |
 | [SECURE_DESIGN](secure-design/SECURE_DESIGN.md) | STRIDE, the four questions, the threat modeling process |
+| [DEFENSE_TACTICS](secure-design/DEFENSE_TACTICS.md) | The castle model: map, guard, deceive, assume infiltration |
 
 ### Web security — `web-security/`
 
@@ -45,6 +46,7 @@ Monitoring the network to find intruders.
 | [README](network-security/README.md) | NSM in one page |
 | [NETWORK_MONITORING](network-security/NETWORK_MONITORING.md) | The five data types, deployment, the detection workflow |
 | [5G_ATTACK_DETECTION](network-security/5G_ATTACK_DETECTION.md) | ML classification over flow features, CICIoT2023, edge placement |
+| [CYBERWARFARE](network-security/CYBERWARFARE.md) | State operations, attribution, threat hunting |
 
 ### Pentest — `pentest/`
 
@@ -79,6 +81,7 @@ The attack surface below the OS.
 | [README](hardware-security/README.md) | The device surface in one page |
 | [HARDWARE_HACKING](hardware-security/HARDWARE_HACKING.md) | UART/JTAG/SWD, SPI/I2C, firmware, radio — and the defenses |
 | [CAR_HACKING](hardware-security/CAR_HACKING.md) | CAN bus, ECUs, OBD-II, IVI pivot, SDR |
+| [FAULT_INJECTION_AND_SIDE_CHANNELS](hardware-security/FAULT_INJECTION_AND_SIDE_CHANNELS.md) | Glitching, SPA/DPA, and the countermeasures |
 
 ---
 
